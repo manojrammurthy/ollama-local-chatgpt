@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <title>Embedding Explorer</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-chart-matrix@1.3.0/dist/chartjs-chart-matrix.min.js"></script>
+  <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+
+
+</head>
+
+<body class="bg-[#0f0f0f] text-white p-6">
+  <h1 class="text-3xl font-bold mb-6">🔍 Embedding Explorer</h1>
+
+  <!-- TEXT INPUT -->
+  <div class="mb-4">
+    <textarea id="embedText" 
+              class="w-full p-4 bg-[#1e1e1e] border border-gray-700 rounded-lg" 
+              rows="4"
+              placeholder="Enter text to generate embedding..."></textarea>
+  </div>
+
+  <button id="genBtn"
+          class="px-6 py-3 bg-blue-600 rounded-lg hover:bg-blue-500">
+    Generate Embedding
+  </button>
+
+  <div id="loading" class="text-green-400 mt-4 hidden">
+    Generating embedding...
+  </div>
+
+  <!-- RESULTS SECTION -->
+  <div id="results" class="mt-6 hidden">
+
+    <h2 class="text-xl font-semibold mb-2">📌 Embedding Summary</h2>
+
+    <p class="text-gray-300 mb-2">
+      Dimension: <span id="dim"></span>
+    </p>
+
+    <p class="text-gray-400">
+      First 30 embedding values:
+    </p>
+    <pre id="preview" class="bg-[#1e1e1e] p-4 rounded-lg mt-2 overflow-x-auto"></pre>
+
+    <h2 class="text-xl font-semibold mt-6 mb-2">📉 PCA Visualization (2D)</h2>
+    <canvas id="pcaChart" width="400" height="300"></canvas>
+
+  </div>
+<!-- COSINE SIMILARITY TOOL -->
+<h2 class="text-2xl font-bold mt-10 mb-4">🔗 Compare Two Texts (Cosine Similarity)</h2>
+
+<div class="grid grid-cols-2 gap-4 mb-4">
+    <textarea id="cmpText1" rows="4"
+              class="p-4 bg-[#1e1e1e] border border-gray-700 rounded-lg"
+              placeholder="First text..."></textarea>
+
+    <textarea id="cmpText2" rows="4"
+              class="p-4 bg-[#1e1e1e] border border-gray-700 rounded-lg"
+              placeholder="Second text..."></textarea>
+</div>
+
+<button id="cmpBtn"
+        class="px-6 py-3 bg-purple-600 rounded-lg hover:bg-purple-500">
+    Compare Embeddings
+</button>
+
+<div id="cmpResults" class="mt-6 hidden">
+    <p class="text-lg font-semibold">Cosine Similarity: <span id="cosSim"></span></p>
+    <p class="text-lg font-semibold">L2 Distance: <span id="l2Dist"></span></p>
+    <p class="text-lg font-semibold">Dot Product: <span id="dotProd"></span></p>
+
+    <h3 class="text-xl mt-4">📉 PCA Comparison</h3>
+    <canvas id="cmpChart" width="400" height="300"></canvas>
+</div>
+<h2 class="text-xl font-semibold mt-6 mb-2">🧊 PCA Visualization (3D)</h2>
+<div id="pcaChart3D" style="width: 100%; height: 400px;"></div>
+
+<!-- HEATMAP SECTION -->
+<h2 class="text-2xl font-bold mt-10 mb-4">🧊 Embedding Difference Heatmap</h2>
+
+<p class="text-gray-300 mb-2">Shows dimension-by-dimension differences between embeddings.</p>
+
+<canvas id="heatmapChart" width="600" height="150"></canvas>
+
+<script>
+const genBtn = document.getElementById("genBtn");
+const embedText = document.getElementById("embedText");
+
+const loading = document.getElementById("loading");
+const results = document.getElementById("results");
+
+let chart = null;
+
+genBtn.onclick = async () => {
+    const text = embedText.value.trim();
+    if (!text) return alert("Enter some text");
+
+    loading.classList.remove("hidden");
+    results.classList.add("hidden");
+
+    const res = await fetch("/embed_text", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({ text })
+    });
+
+    const data = await res.json();
+    loading.classList.add("hidden");
+
+    if (data.error) {
+        alert("Error: " + data.error);
+        return;
+    }
+
+    // Show results
+    results.classList.remove("hidden");
+
+    document.getElementById("dim").innerText = data.dimension;
+    document.getElementById("preview").innerText = JSON.stringify(data.vector_preview, null, 2);
+
+    // Plot PCA
+    const p = data.pca;
+
+    if (chart) chart.destroy();
+
+    const ctx = document.getElementById("pcaChart").getContext("2d");
+
+    chart = new Chart(ctx, {
+        type: "scatter",
+        data: {
+            datasets: [{
+                label: "Vector PCA Point",
+                data: [{x: p[0], y: p[1]}],
+                backgroundColor: "rgb(0, 255, 150)"
+            }]
+        },
+        options: {
+            scales: {
+                x: { title: { display: true, text: "PCA-1" } },
+                y: { title: { display: true, text: "PCA-2" } }
+            }
+        }
+    });
+};
+
+const cmpBtn = document.getElementById("cmpBtn");
+let cmpChart = null;
+
+cmpBtn.onclick = async () => {
+    const t1 = document.getElementById("cmpText1").value.trim();
+    const t2 = document.getElementById("cmpText2").value.trim();
+
+    if (!t1 || !t2) {
+        alert("Enter both texts!");
+        return;
+    }
+
+    const res = await fetch("/compare_embeddings", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({ text1: t1, text2: t2 })
+    });
+
+    const data = await res.json();
+
+    if (data.error) {
+        alert("Error comparing embeddings");
+        return;
+    }
+
+    document.getElementById("cmpResults").classList.remove("hidden");
+
+    document.getElementById("cosSim").innerText = data.cosine_similarity.toFixed(4);
+    document.getElementById("l2Dist").innerText = data.l2_distance.toFixed(4);
+    document.getElementById("dotProd").innerText = data.dot_product.toFixed(4);
+
+    // Plot PCA results
+    if (cmpChart) cmpChart.destroy();
+
+    const ctx = document.getElementById("cmpChart").getContext("2d");
+    const p = data.pca_points;
+
+    cmpChart = new Chart(ctx, {
+        type: "scatter",
+        data: {
+            datasets: [
+                {
+                    label: "Text 1",
+                    data: [{ x: p[0][0], y: p[0][1] }],
+                    backgroundColor: "rgb(0,255,150)"
+                },
+                {
+                    label: "Text 2",
+                    data: [{ x: p[1][0], y: p[1][1] }],
+                    backgroundColor: "rgb(255,100,100)"
+                }
+            ]
+        },
+        options: {
+            scales: {
+                x: { title: { display: true, text: "PCA-1" } },
+                y: { title: { display: true, text: "PCA-2" } }
+            }
+        }
+    });
+    createHeatmap(data.diff_vector);
+};
+
+let heatmapChart = null;
+
+function createHeatmap(diffVector) {
+    const ctx = document.getElementById("heatmapChart").getContext("2d");
+
+    // Prepare data for matrix chart
+    const matrixData = diffVector.map((value, idx) => ({
+        x: idx,
+        y: 0,
+        v: value
+    }));
+
+    const maxAbs = Math.max(...diffVector.map(v => Math.abs(v)));
+
+    if (heatmapChart) heatmapChart.destroy();
+
+    heatmapChart = new Chart(ctx, {
+        type: 'matrix',
+        data: {
+            datasets: [{
+                label: "Embedding Difference Heatmap",
+                data: matrixData,
+                backgroundColor({ raw }) {
+                    const alpha = Math.abs(raw.v) / maxAbs;
+                    return raw.v > 0
+                        ? `rgba(0,255,0,${alpha})`      // Green for positive
+                        : `rgba(255,0,0,${alpha})`;     // Red for negative
+                },
+                                width: (ctx) => {
+                    const chart = ctx.chart;
+                    if (!chart.chartArea) return 1;
+                    return chart.chartArea.width / diffVector.length;
+                },
+                height: (ctx) => {
+                    const chart = ctx.chart;
+                    if (!chart.chartArea) return 30;
+                    return chart.chartArea.height;
+                },
+
+                // width: ({ chart }) => chart.chartArea.width / diffVector.length,
+                // height: ({ chart }) => chart.chartArea.height
+            }]
+        },
+        options: {
+            scales: {
+                x: {
+                    display: false,
+                },
+                y: {
+                    display: false,
+                }
+            },
+            plugins: {
+                tooltip: {
+                    callbacks: {
+                        label(ctx) {
+                            return `Dim ${ctx.raw.x}: ${ctx.raw.v.toFixed(4)}`;
+                        }
+                    }
+                }
+            }
+        }
+    });
+}
+
+</script>
+
+</body>
+</html>
