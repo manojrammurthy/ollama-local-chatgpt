@@ -1,13 +1,12 @@
-from flask import Flask, request, Response, jsonify, render_template
+from flask import Flask, request, Response, jsonify, render_template, send_file
 from flask_cors import CORS
 import requests
 import json
 import fitz
 import numpy as np
 import faiss
-   # Compute PCA (2D reduction)
-import numpy as np
-from sklearn.decomposition import PCA
+import os
+import io
 
 app = Flask(__name__)
 CORS(app)
@@ -16,19 +15,32 @@ messages = []
 MODEL = "phi3"
 EMBED_MODEL = "nomic-embed-text"
 
-vector_index = None
-documents = []
+documents = []       # stores PDF metadata + chunks
+faiss_index = None   # global FAISS index
+faiss_meta = []      # parallel metadata list for each vector
 
+
+# -------------------------------
+# HOME
+# -------------------------------
 @app.route("/")
 def home():
     return render_template("index.html")
 
+
+# -------------------------------
+# CLEAR CONVERSATION
+# -------------------------------
 @app.route("/clear", methods=["POST"])
 def clear():
     global messages
     messages = []
     return jsonify({"status": "cleared"})
 
+
+# -------------------------------
+# OLLAMA MODELS
+# -------------------------------
 @app.route("/models", methods=["GET"])
 def models():
     try:
@@ -39,6 +51,10 @@ def models():
     except:
         return jsonify({"models": []})
 
+
+# -------------------------------
+# SET MODEL
+# -------------------------------
 @app.route("/set_model", methods=["POST"])
 def set_model():
     global MODEL, messages
@@ -46,10 +62,40 @@ def set_model():
     messages = []
     return jsonify({"status": "ok", "model": MODEL})
 
+
+# -------------------------------
+# PDF THUMBNAIL (first page)
+# -------------------------------
+@app.route("/pdf_thumbnail/<path:doc_id>")
+def pdf_thumbnail(doc_id):
+    try:
+        for doc in documents:
+            if doc["doc_id"] == doc_id:
+                pdf_path = doc["path"]
+                break
+        else:
+            return "Not found", 404
+
+        pdf = fitz.open(pdf_path)
+        page = pdf.load_page(0)
+        pix = page.get_pixmap(matrix=fitz.Matrix(0.3, 0.3))
+
+        return send_file(
+            io.BytesIO(pix.tobytes("png")),
+            mimetype="image/png"
+        )
+
+    except Exception as e:
+        print("Thumbnail error:", e)
+        return "Error", 500
+
+
+# -------------------------------
+# NORMAL CHAT
+# -------------------------------
 @app.route("/chat", methods=["POST"])
 def chat():
     user_msg = request.json.get("message", "")
-    
     messages.append({"role": "user", "content": user_msg})
 
     payload = {
@@ -60,12 +106,16 @@ def chat():
 
     def generate():
         assistant_reply = ""
-        response = requests.post("http://localhost:11434/api/chat", json=payload, stream=True)
+        response = requests.post(
+            "http://localhost:11434/api/chat",
+            json=payload,
+            stream=True
+        )
 
         for line in response.iter_lines():
             if line:
-                data = json.loads(line.decode())
-                delta = data.get("message", {}).get("content", "")
+                chunk = json.loads(line.decode())
+                delta = chunk.get("message", {}).get("content", "")
                 assistant_reply += delta
                 yield delta
 
@@ -73,106 +123,158 @@ def chat():
 
     return Response(generate(), content_type="text/plain")
 
+
+# -------------------------------
+# PDF UPLOAD + RAG CHUNK INDEXING
+# -------------------------------
 @app.route("/upload_pdf", methods=["POST"])
 def upload_pdf():
-    global vector_index, documents
+    global faiss_index, faiss_meta, documents
 
-    print("FILES RECEIVED:", request.files)
+    UPLOAD_DIR = "uploaded_pdfs"
+    os.makedirs(UPLOAD_DIR, exist_ok=True)
 
-    if 'file' not in request.files:
-        return jsonify({"error": "No file part"}), 400
+    if "file" not in request.files:
+        return jsonify({"error": "No file provided"}), 400
 
-    file = request.files['file']
-    if file.filename == "":
-        return jsonify({"error": "No file selected"}), 400
+    file = request.files["file"]
+    filename = file.filename
+    file_path = os.path.join(UPLOAD_DIR, filename)
+
+    # Read once → save → parse
+    file_bytes = file.read()
+    with open(file_path, "wb") as f:
+        f.write(file_bytes)
 
     try:
-        pdf = fitz.open(stream=file.read(), filetype="pdf")
+        pdf = fitz.open(stream=file_bytes, filetype="pdf")
     except:
         return jsonify({"error": "Invalid PDF"}), 400
 
-    text = ""
-    for page in pdf:
-        text += page.get_text()
+    chunks = []
+    pages = []
 
-    # Chunk
-    words = text.split()
-    chunks = [" ".join(words[i:i+200]) for i in range(0, len(words), 200)]
+    for page_num, page in enumerate(pdf):
+        text = page.get_text()
+        words = text.split()
+        CHUNK = 200
 
-    documents = chunks
+        for i in range(0, len(words), CHUNK):
+            chunk_text = " ".join(words[i:i+CHUNK])
+            chunks.append(chunk_text)
+            pages.append(page_num + 1)
 
+    # Save metadata
+    doc_obj = {
+        "doc_id": filename,
+        "path": file_path,
+        "chunks": chunks,
+        "pages": pages
+    }
+    documents.append(doc_obj)
+
+    # Generate embeddings
     vectors = []
-    for chunk in chunks:
+    for idx, chunk in enumerate(chunks):
+
         emb = requests.post(
             "http://localhost:11434/api/embed",
             json={"model": EMBED_MODEL, "input": chunk}
         ).json()
 
-        # Properly check inside loop
         if "embeddings" not in emb:
-            print("Embedding error:", emb)  # Log error
-            continue  # Skip this chunk safely
+            print("Embedding failed for chunk", idx)
+            continue
 
-        vectors.append(emb["embeddings"][0])
+        vector = emb["embeddings"][0]
+        vectors.append(vector)
 
-
+        faiss_meta.append({
+            "doc_id": filename,
+            "page": pages[idx],
+            "chunk": chunk
+        })
 
     vectors = np.array(vectors, dtype="float32")
 
-    dim = vectors.shape[1]
-    vector_index = faiss.IndexFlatL2(dim)
-    vector_index.add(vectors)
+    if faiss_index is None:
+        faiss_index = faiss.IndexFlatL2(vectors.shape[1])
 
-    return jsonify({"chunks": len(chunks)})
+    faiss_index.add(vectors)
 
+    return jsonify({
+        "file": filename,
+        "chunks": len(chunks),
+        "status": "indexed"
+    })
+
+
+# -------------------------------
+# ASK QUESTIONS OVER PDF (RAG)
+# -------------------------------
 @app.route("/ask_pdf", methods=["POST"])
 def ask_pdf():
-    global vector_index, documents, MODEL
+    global faiss_index, faiss_meta, MODEL
 
-    if vector_index is None:
-        return jsonify({"error": "No PDF uploaded"}), 400
+    selected_docs = request.json.get("selected_docs", [])
+    question = request.json.get("message", "")
 
-    question = request.json.get("message")
+    if faiss_index is None:
+        return jsonify({"error": "No PDFs uploaded"}), 400
 
-    qvec = requests.post(
+    qemb = requests.post(
         "http://localhost:11434/api/embed",
         json={"model": EMBED_MODEL, "input": question}
     ).json()
-    
-    if "embeddings" not in emb_q:
-     return jsonify({"error": "Embedding failed", "details": emb_q}), 400
 
-    qvec = emb_q["embeddings"][0]
+    if "embeddings" not in qemb:
+        return jsonify({"error": "Embedding failed"}), 400
 
-    qvec = np.array(qvec, dtype="float32").reshape(1, -1)
+    qvec = np.array(qemb["embeddings"][0], dtype="float32").reshape(1, -1)
 
-    distances, indices = vector_index.search(qvec, 3)
+    # Search top-5 chunks
+    distances, indices = faiss_index.search(qvec, 5)
 
-    context = "\n".join([documents[i] for i in indices[0]])
+    context = ""
 
-    rag_prompt = f"""
-Use the below context to answer the question.
+    for idx in indices[0]:
+        meta = faiss_meta[idx]
+
+        if selected_docs and meta["doc_id"] not in selected_docs:
+            continue
+
+        context += f"\n[PDF: {meta['doc_id']} | Page {meta['page']}]\n{meta['chunk']}\n"
+
+    prompt = f"""
+Use ONLY the context below to answer the question.
 
 Context:
 {context}
 
 Question: {question}
 
-Answer concisely:
+If the answer is NOT found in the context, reply:
+"The documents do not contain this information."
+
+Answer:
 """
 
-    messages.append({"role": "user", "content": rag_prompt})
+    messages.append({"role": "user", "content": prompt})
 
     payload = {"model": MODEL, "messages": messages, "stream": True}
 
     def generate():
         assistant_reply = ""
-        response = requests.post("http://localhost:11434/api/chat", json=payload, stream=True)
+        resp = requests.post(
+            "http://localhost:11434/api/chat",
+            json=payload,
+            stream=True
+        )
 
-        for line in response.iter_lines():
+        for line in resp.iter_lines():
             if line:
-                data = json.loads(line.decode())
-                delta = data.get("message", {}).get("content", "")
+                chunk = json.loads(line.decode())
+                delta = chunk.get("message", {}).get("content", "")
                 assistant_reply += delta
                 yield delta
 
@@ -180,145 +282,136 @@ Answer concisely:
 
     return Response(generate(), content_type="text/plain")
 
-# @app.route("/embed_text", methods=["POST"])
-# def embed_text():
-#     text = request.json.get("text", "").strip()
-#     if not text:
-#         return jsonify({"error": "empty text"}), 400
 
-#     # Call Ollama embedding endpoint
-#     response = requests.post(
-#         "http://localhost:11434/api/embed",
-#         json={"model": EMBED_MODEL, "input": text}
-#     ).json()
+# -------------------------------
+# EMBEDDING EXPLORER ENDPOINTS
+# -------------------------------
+@app.route("/embedding_explorer")
+def embedding_explorer():
+    return render_template("embedding_explorer.html")
 
-#     if "embeddings" not in response:
-#         return jsonify({"error": "embedding_failed", "details": response}), 400
-
-#     vector = response["embeddings"][0]
-
- 
-#     arr = np.array(vector).reshape(1, -1)
-
-#     # # PCA requires at least 2 samples — workaround: duplicate vector
-#     # if arr.shape[0] == 1:
-#     #     arr_for_pca = np.vstack([arr, arr])  # duplicate
-#     # else:
-#     #     arr_for_pca = arr
-
-#     # pca = PCA(n_components=2)
-#     # reduced = pca.fit_transform(arr_for_pca)[0].tolist()
-
-#     if arr.shape[0] == 1:
-#         jitter = np.random.normal(0, 0.0001, size=arr.shape)
-#         arr_for_pca = np.vstack([arr, arr + jitter])
-#     else:
-#         arr_for_pca = arr
-
-    # return jsonify({
-    #     "vector": vector,
-    #     "vector_preview": vector[:30],  # show only first 30 dims
-    #     "dimension": len(vector),
-    #     "pca": reduced
-    # })
 
 @app.route("/embed_text", methods=["POST"])
 def embed_text():
     text = request.json.get("text", "").strip()
     if not text:
-        return jsonify({"error": "empty text"}), 400
+        return jsonify({"error": "empty"}), 400
 
-    # Call Ollama embedding API
-    response = requests.post(
+    emb = requests.post(
         "http://localhost:11434/api/embed",
         json={"model": EMBED_MODEL, "input": text}
     ).json()
 
-    if "embeddings" not in response:
-        return jsonify({"error": "embedding_failed", "details": response}), 400
-
-    vector = response["embeddings"][0]
-
-    # Convert to numpy
-    import numpy as np
-    arr = np.array(vector).reshape(1, -1)
-
-    # PCA reduction (handle 1-sample case)
-    from sklearn.decomposition import PCA
-
-    if arr.shape[0] == 1:
-        # Duplicate vector to satisfy PCA requirement
-        arr_for_pca = np.vstack([arr, arr + np.random.normal(0, 1e-6, arr.shape)])
-    else:
-        arr_for_pca = arr
-
-    pca = PCA(n_components=2)
-    pca_result = pca.fit_transform(arr_for_pca)
-
-    # Use only the first point (actual vector)
-    reduced = pca_result[0].tolist()
-
-    return jsonify({
-        "vector": vector,
-        "vector_preview": vector[:30],
-        "dimension": len(vector),
-        "pca": reduced
-    })
-@app.route("/compare_embeddings", methods=["POST"])
-def compare_embeddings():
-    data = request.json
-    text1 = data.get("text1", "").strip()
-    text2 = data.get("text2", "").strip()
-
-    if not text1 or not text2:
-        return jsonify({"error": "Both text fields are required"}), 400
-
-    # Call embedding API for both
-    emb1 = requests.post(
-        "http://localhost:11434/api/embed",
-        json={"model": EMBED_MODEL, "input": text1}
-    ).json()
-
-    emb2 = requests.post(
-        "http://localhost:11434/api/embed",
-        json={"model": EMBED_MODEL, "input": text2}
-    ).json()
-
-    if "embeddings" not in emb1 or "embeddings" not in emb2:
+    if "embeddings" not in emb:
         return jsonify({"error": "embedding_failed"}), 400
 
-    v1 = np.array(emb1["embeddings"][0])
-    v2 = np.array(emb2["embeddings"][0])
-
-    # Cosine similarity
-    cos_sim = float(np.dot(v1, v2) / (np.linalg.norm(v1) * np.linalg.norm(v2)))
-
-    # L2 distance
-    l2_dist = float(np.linalg.norm(v1 - v2))
-
-    # Dot product
-    dot_prod = float(np.dot(v1, v2))
-
-    # PCA Visualisation
-    matrix = np.vstack([v1, v2])
+    vec = emb["embeddings"][0]
+    arr = np.array(vec).reshape(1, -1)
 
     from sklearn.decomposition import PCA
+    arr2 = np.vstack([arr, arr + np.random.normal(0, 1e-6, arr.shape)])
     pca = PCA(n_components=2)
-    pca_points = pca.fit_transform(matrix).tolist()  # [[x1,y1], [x2,y2]]
-    diff = (v1 - v2).tolist()
+    reduced = pca.fit_transform(arr2)[0].tolist()
 
     return jsonify({
-        "cosine_similarity": cos_sim,
-        "l2_distance": l2_dist,
-        "dot_product": dot_prod,
-        "pca_points": pca_points,
-        "diff_vector": diff
+        "vector": vec,
+        "vector_preview": vec[:30],
+        "dimension": len(vec),
+        "pca": reduced
+    })
+
+@app.route("/delete_pdf", methods=["POST"])
+def delete_pdf():
+    global documents, faiss_index, faiss_meta
+
+    doc_id = request.json.get("doc_id")
+    if not doc_id:
+        return jsonify({"error": "No doc_id provided"}), 400
+
+    # --- 1️⃣ Remove file from disk ---
+    for doc in documents:
+        if doc["doc_id"] == doc_id:
+            try:
+                os.remove(doc["path"])
+            except:
+                pass
+            break
+
+    # --- 2️⃣ Remove from documents list ---
+    documents = [doc for doc in documents if doc["doc_id"] != doc_id]
+
+    # --- 3️⃣ Remove its vectors from FAISS metadata ---
+    faiss_meta = [m for m in faiss_meta if m["doc_id"] != doc_id]
+
+    # --- 4️⃣ Rebuild FAISS index ---
+    if len(faiss_meta) == 0:
+        faiss_index = None
+        return jsonify({"status": "deleted", "remaining": 0})
+
+    # Extract all remaining vectors again
+    all_vectors = []
+
+    for meta in faiss_meta:
+        emb = requests.post(
+            "http://localhost:11434/api/embed",
+            json={"model": EMBED_MODEL, "input": meta["chunk"]}
+        ).json()
+
+        if "embeddings" in emb:
+            all_vectors.append(emb["embeddings"][0])
+
+    if len(all_vectors) == 0:
+        faiss_index = None
+        return jsonify({"status": "deleted", "remaining": 0})
+
+    # Rebuild FAISS
+    all_vectors = np.array(all_vectors, dtype="float32")
+    dim = all_vectors.shape[1]
+
+    faiss_index = faiss.IndexFlatL2(dim)
+    faiss_index.add(all_vectors)
+
+    return jsonify({
+        "status": "deleted",
+        "remaining": len(all_vectors)
     })
 
 
-@app.route("/embedding_explorer")
-def embedding_explorer():
-    return render_template("embedding_explorer.html")
+@app.route("/compare_embeddings", methods=["POST"])
+def compare_embeddings():
+    t1 = request.json.get("text1", "")
+    t2 = request.json.get("text2", "")
+
+    if not t1 or not t2:
+        return jsonify({"error": "missing"}), 400
+
+    e1 = requests.post(
+        "http://localhost:11434/api/embed",
+        json={"model": EMBED_MODEL, "input": t1}
+    ).json()
+
+    e2 = requests.post(
+        "http://localhost:11434/api/embed",
+        json={"model": EMBED_MODEL, "input": t2}
+    ).json()
+
+    v1 = np.array(e1["embeddings"][0])
+    v2 = np.array(e2["embeddings"][0])
+
+    cos = float(np.dot(v1, v2) / (np.linalg.norm(v1) * np.linalg.norm(v2)))
+    l2 = float(np.linalg.norm(v1 - v2))
+    dot = float(np.dot(v1, v2))
+
+    from sklearn.decomposition import PCA
+    pts = PCA(n_components=2).fit_transform(np.vstack([v1, v2])).tolist()
+
+    return jsonify({
+        "cosine_similarity": cos,
+        "l2_distance": l2,
+        "dot_product": dot,
+        "pca_points": pts,
+        "diff_vector": (v1 - v2).tolist()
+    })
 
 
 if __name__ == "__main__":

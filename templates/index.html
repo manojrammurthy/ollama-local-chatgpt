@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en" class="dark">
 <head>
-  <meta charset="UTF-8">
+  <meta charset="UTF-8" />
   <title>Local ChatGPT - Ollama</title>
 
   <script src="https://cdn.tailwindcss.com"></script>
@@ -9,8 +9,6 @@
   <style>
     body { background-color: #0f0f0f; }
     .chat-bubble { white-space: pre-wrap; }
-    
-    /* Typing dots */
     .typing-dot {
       display: inline-block;
       width: 8px;
@@ -22,7 +20,6 @@
     }
     .typing-dot:nth-child(2) { animation-delay: 0.2s; }
     .typing-dot:nth-child(3) { animation-delay: 0.4s; }
-
     @keyframes blink {
       0% { opacity: 0.2; transform: translateY(0); }
       50% { opacity: 1; transform: translateY(-3px); }
@@ -35,12 +32,11 @@
 
 <!-- HEADER -->
 <header class="p-4 bg-[#1e1e1e] border-b border-gray-700 flex items-center justify-between">
-
   <div class="flex items-center space-x-4">
     <h1 class="text-xl font-semibold text-white">Local ChatGPT (Ollama)</h1>
 
-    <!-- MODEL DROPDOWN -->
-    <select id="model-select" class="bg-[#2b2b2b] text-white px-3 py-2 rounded-lg border border-gray-600">
+    <select id="model-select"
+      class="bg-[#2b2b2b] text-white px-3 py-2 rounded-lg border border-gray-600">
       <option>Loading...</option>
     </select>
   </div>
@@ -55,36 +51,65 @@
       Clear Chat
     </button>
   </div>
-
 </header>
 
-<!-- CHAT WINDOW -->
-<div id="chat-box" class="flex-1 overflow-y-auto p-4 space-y-4"></div>
+<!-- LAYOUT -->
+<div class="flex flex-1 h-full">
 
-<!-- FOOTER -->
-<footer class="p-4 bg-[#1e1e1e] border-t border-gray-700">
+  <!-- SIDEBAR -->
+  <aside class="w-72 bg-[#1b1b1b] border-r border-gray-700 p-4 overflow-y-auto">
+    <h2 class="text-lg font-semibold mb-3 text-white">📚 Uploaded PDFs</h2>
 
-  <div class="mb-3">
-    <button id="ask-pdf-btn" class="px-4 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-500">
-      Ask from PDF
-    </button>
+    <div class="flex justify-between mb-3">
+      <button id="selectAllBtn" class="text-sm text-blue-400 hover:underline">
+        Select All
+      </button>
+      <button id="deselectAllBtn" class="text-sm text-blue-400 hover:underline">
+        Clear
+      </button>
+    </div>
+
+    <div id="pdfList" class="space-y-4 text-gray-300">
+      <p class="text-gray-500">No PDFs uploaded yet.</p>
+    </div>
+
+  </aside>
+
+  <!-- CHAT AREA -->
+  <div class="flex flex-col flex-1">
+
+    <div id="chat-box" class="flex-1 overflow-y-auto p-4 space-y-4"></div>
+
+    <!-- FOOTER -->
+    <footer class="p-4 bg-[#1e1e1e] border-t border-gray-700">
+
+      <div class="mb-3 flex space-x-3">
+        <button id="ask-pdf-btn"
+          class="px-4 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-500">
+          Ask from Selected PDFs
+        </button>
+
+        <a href="/embedding_explorer"
+          class="px-4 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-500">
+          Embedding Explorer
+        </a>
+      </div>
+
+      <div class="flex space-x-3">
+        <input id="message"
+          class="flex-1 p-3 bg-[#2b2b2b] border border-gray-600 rounded-lg focus:outline-none"
+          placeholder="Type your message..." />
+
+        <button id="send-btn"
+          class="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-500">
+          Send
+        </button>
+      </div>
+
+    </footer>
   </div>
-  <a href="/embedding_explorer" 
-   class="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-500">
-   Embedding Explorer
-</a>
+</div>
 
-  <div class="flex space-x-3">
-    <input id="message"
-      class="flex-1 p-3 bg-[#2b2b2b] border border-gray-600 rounded-lg focus:outline-none"
-      placeholder="Type your message..." />
-
-    <button id="send-btn"
-      class="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-500">
-      Send
-    </button>
-  </div>
-</footer>
 
 <script>
 const chatBox = document.getElementById("chat-box");
@@ -93,14 +118,108 @@ const sendBtn = document.getElementById("send-btn");
 const clearBtn = document.getElementById("clear-chat");
 const uploadBtn = document.getElementById("upload-btn");
 const pdfInput = document.getElementById("pdf-input");
+const pdfList = document.getElementById("pdfList");
 const askPdfBtn = document.getElementById("ask-pdf-btn");
 
+let selectedDocs = [];   // ACTIVE PDF selection
 let pdfMode = false;
-let autoScroll = true;
 
-// -----------------------
-// MODEL SELECTION
-// -----------------------
+// -----------------------------
+// ADD PDF TO SIDEBAR
+// -----------------------------
+function addPdfToSidebar(fileName, chunks) {
+  if (pdfList.children[0]?.innerText.includes("No PDFs")) {
+    pdfList.innerHTML = "";
+  }
+
+  const wrapper = document.createElement("div");
+  wrapper.className =
+    "relative p-3 bg-[#252525] rounded-lg border border-gray-700 shadow-sm";
+
+  wrapper.innerHTML = `
+    <label class="flex items-start space-x-3 cursor-pointer">
+
+      <input type="checkbox"
+             class="pdf-checkbox h-5 w-5 mt-1"
+             value="${fileName}">
+
+      <div class="flex-1">
+        <img src="/pdf_thumbnail/${fileName}"
+             class="w-full h-28 object-cover rounded border border-gray-700 mb-2" />
+
+        <div class="text-white font-semibold">${fileName}</div>
+        <div class="text-sm text-gray-400">${chunks} chunks</div>
+      </div>
+    </label>
+
+    <!-- 🗑 DELETE BUTTON -->
+    <button class="absolute top-2 right-2 text-red-400 hover:text-red-300 delete-btn"
+            data-doc="${fileName}">
+      🗑
+    </button>
+  `;
+
+  pdfList.appendChild(wrapper);
+
+  // Register delete button event
+  wrapper.querySelector(".delete-btn").onclick = () => deletePdf(fileName);
+
+  updateSelected();
+}
+
+async function deletePdf(docName) {
+  if (!confirm(`Delete ${docName}?`)) return;
+
+  // Remove from backend
+  const res = await fetch("/delete_pdf", {
+    method: "POST",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({ doc_id: docName })
+  });
+
+  const data = await res.json();
+
+  // Remove from UI
+  [...pdfList.children].forEach(div => {
+    if (div.innerHTML.includes(docName)) div.remove();
+  });
+
+  // If no PDFs left
+  if (pdfList.children.length === 0) {
+    pdfList.innerHTML = `<p class="text-gray-500">No PDFs uploaded yet.</p>`;
+  }
+
+  alert(`Deleted: ${docName}`);
+  updateSelected();
+}
+
+// Track selected PDFs
+function updateSelected() {
+  selectedDocs = [...document.querySelectorAll(".pdf-checkbox:checked")]
+    .map(cb => cb.value);
+
+  askPdfBtn.innerText =
+    selectedDocs.length > 0
+      ? `Ask (${selectedDocs.length} PDFs)`
+      : "Ask from Selected PDFs";
+}
+
+// Select All
+document.getElementById("selectAllBtn").onclick = () => {
+  document.querySelectorAll(".pdf-checkbox").forEach(cb => cb.checked = true);
+  updateSelected();
+};
+
+// Clear All
+document.getElementById("deselectAllBtn").onclick = () => {
+  document.querySelectorAll(".pdf-checkbox").forEach(cb => cb.checked = false);
+  updateSelected();
+};
+
+
+// -----------------------------
+// MODEL DROPDOWN
+// -----------------------------
 const modelSelect = document.getElementById("model-select");
 
 async function loadModels() {
@@ -115,87 +234,42 @@ async function loadModels() {
     option.textContent = model;
     modelSelect.appendChild(option);
   });
-
-  const savedModel = localStorage.getItem("selectedModel");
-  if (savedModel && data.models.includes(savedModel)) {
-    modelSelect.value = savedModel;
-    await setModel(savedModel);
-  }
-}
-
-async function setModel(model) {
-  await fetch("/set_model", {
-    method: "POST",
-    headers: {"Content-Type": "application/json"},
-    body: JSON.stringify({ model })
-  });
-
-  localStorage.setItem("selectedModel", model);
-  clearHistory();
 }
 
 modelSelect.onchange = async () => {
-  await setModel(modelSelect.value);
+  await fetch("/set_model", {
+    method: "POST",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({ model: modelSelect.value })
+  });
   alert("Model changed to " + modelSelect.value);
 };
 
-// -----------------------
-// CHAT HISTORY
-// -----------------------
-function saveHistory() {
-  localStorage.setItem("chatHistory", chatBox.innerHTML);
-}
 
-function loadHistory() {
-  const saved = localStorage.getItem("chatHistory");
-  if (saved) chatBox.innerHTML = saved;
-}
-
-function clearHistory() {
-  localStorage.removeItem("chatHistory");
-  chatBox.innerHTML = "";
-}
-
-loadHistory();
-
-// -----------------------
-// AUTO SCROLL
-// -----------------------
-chatBox.addEventListener("scroll", () => {
-  const nearBottom = chatBox.scrollHeight - chatBox.scrollTop <= chatBox.clientHeight + 50;
-  autoScroll = nearBottom;
-});
-
-function smartScroll() {
-  if (autoScroll) {
-    chatBox.scrollTo({ top: chatBox.scrollHeight, behavior: "smooth" });
-  }
-}
-
-// -----------------------
+// -----------------------------
 // CHAT BUBBLES
-// -----------------------
+// -----------------------------
 function addBubble(role, text) {
   const div = document.createElement("div");
 
-  if (role === "user") {
-    div.className = "chat-bubble max-w-xl ml-auto bg-blue-600 text-white p-3 rounded-xl";
-  } else {
-    div.className = "chat-bubble max-w-xl mr-auto bg-[#2f2f2f] text-green-300 p-3 rounded-xl";
-  }
+  div.className =
+    role === "user"
+      ? "chat-bubble max-w-xl ml-auto bg-blue-600 text-white p-3 rounded-xl"
+      : "chat-bubble max-w-xl mr-auto bg-[#2f2f2f] text-green-300 p-3 rounded-xl";
 
-  div.innerText = text;
+  div.innerHTML = text.replace(/\n/g, "<br>");
   chatBox.appendChild(div);
-  smartScroll();
-  saveHistory();
+  chatBox.scrollTop = chatBox.scrollHeight;
 }
 
-// -----------------------
+
+// -----------------------------
 // TYPING INDICATOR
-// -----------------------
+// -----------------------------
 function showTyping() {
   const div = document.createElement("div");
   div.id = "typingIndicator";
+
   div.className =
     "chat-bubble max-w-xs mr-auto bg-[#2f2f2f] text-green-300 p-3 rounded-xl flex space-x-1";
 
@@ -206,27 +280,27 @@ function showTyping() {
   `;
 
   chatBox.appendChild(div);
-  smartScroll();
-  saveHistory();
+  chatBox.scrollTop = chatBox.scrollHeight;
 }
 
 function removeTyping() {
   const t = document.getElementById("typingIndicator");
   if (t) t.remove();
-  saveHistory();
 }
 
-// -----------------------
+
+// -----------------------------
 // CLEAR CHAT
-// -----------------------
+// -----------------------------
 clearBtn.onclick = () => {
-  clearHistory();
+  chatBox.innerHTML = "";
   fetch("/clear", { method: "POST" });
 };
 
-// -----------------------
+
+// -----------------------------
 // PDF UPLOAD
-// -----------------------
+// -----------------------------
 uploadBtn.onclick = () => pdfInput.click();
 
 pdfInput.onchange = async () => {
@@ -244,21 +318,18 @@ pdfInput.onchange = async () => {
   });
 
   const data = await res.json();
-  addBubble("llm", `PDF processed. ${data.chunks} chunks stored.`);
+
+  addBubble("llm", `📄 ${data.file} uploaded (${data.chunks} chunks)`);
+
+  addPdfToSidebar(data.file, data.chunks);
 };
 
-// Toggle PDF Q&A
-askPdfBtn.onclick = () => {
-  pdfMode = !pdfMode;
-  askPdfBtn.classList.toggle("bg-purple-800");
-  askPdfBtn.innerText = pdfMode ? "PDF Mode ON" : "Ask from PDF";
-};
 
-// -----------------------
-// SEND MESSAGE
-// -----------------------
+// -----------------------------
+// SEND MESSAGE (supports PDF RAG)
+// -----------------------------
 sendBtn.onclick = async () => {
-  let text = msgBox.value.trim();
+  const text = msgBox.value.trim();
   if (!text) return;
 
   addBubble("user", text);
@@ -266,15 +337,21 @@ sendBtn.onclick = async () => {
 
   showTyping();
 
-  const response = await fetch(pdfMode ? "/ask_pdf" : "/chat", {
-    method: "POST",
-    headers: {"Content-Type": "application/json"},
-    body: JSON.stringify({ message: text })
-  });
+  const body = pdfMode
+    ? { message: text, selected_docs: selectedDocs }
+    : { message: text };
+
+  const response = await fetch(
+    pdfMode ? "/ask_pdf" : "/chat",
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body)
+    }
+  );
 
   removeTyping();
 
-  // Streaming response
   let reader = response.body.getReader();
   let decoder = new TextDecoder();
 
@@ -282,23 +359,28 @@ sendBtn.onclick = async () => {
   let bubble = document.createElement("div");
   bubble.className =
     "chat-bubble max-w-xl mr-auto bg-[#2f2f2f] text-green-300 p-3 rounded-xl";
-  bubble.innerText = "";
   chatBox.appendChild(bubble);
 
   while (true) {
     const { value, done } = await reader.read();
     if (done) break;
 
-    let chunk = decoder.decode(value);
+    const chunk = decoder.decode(value);
     llmText += chunk;
-    bubble.innerText = llmText;
-
-    smartScroll();
-    saveHistory();
+    bubble.innerHTML = llmText.replace(/\n/g, "<br>");
+    chatBox.scrollTop = chatBox.scrollHeight;
   }
 };
 
-// Init
+
+// Toggle PDF mode
+askPdfBtn.onclick = () => {
+  pdfMode = !pdfMode;
+  askPdfBtn.classList.toggle("bg-purple-800");
+  askPdfBtn.innerText = pdfMode ? "PDF Mode: ON" : "Ask from Selected PDFs";
+};
+
+
 loadModels();
 </script>
 
