@@ -7,149 +7,125 @@
 ![FAISS](https://img.shields.io/badge/FAISS-Vector%20Search-purple)
 ![License](https://img.shields.io/badge/License-MIT-yellow)
 ![Stars](https://img.shields.io/github/stars/manojrammurthy/ollama-local-chatgpt?style=social)
-🚀 Overview
+# 💬 Ollama Local ChatGPT + Embedding Explorer + PDF RAG  
+**A fully local AI research & development platform built with Flask, FAISS, Plotly, Chart.js, Tailwind, and Ollama.**
+
+🔗 **GitHub Repo:** https://github.com/manojrammurthy/ollama-local-chatgpt  
+🧠 *Everything runs offline — no API keys or cloud required.*
+
+---
+
+## 🚀 Overview
+
+This project is a **complete local AI workspace** that brings together:
+
+### ✔ Local ChatGPT UI (Ollama)
+- Streaming chat
+- Model selector  
+- PDF RAG mode  
+- Source citations  
+- Clean dark UI  
+
+### ✔ Embedding Explorer (Full Interactive Toolkit)
+- Generate embeddings  
+- PCA (2D)  
+- PCA (3D – Plotly)  
+- Cosine similarity / L2 distance / Dot product  
+- Dim-wise difference heatmap  
+- Batch embedding  
+- FAISS persistent vector index  
+- Similarity matrix  
+- KMeans clustering with PCA visual  
+
+### ✔ PDF Intelligence (RAG)
+- Upload PDFs  
+- Auto chunking  
+- Generate embeddings  
+- Store in FAISS  
+- Query by selected PDFs  
+- Show page numbers as sources  
+- Delete + auto-rebuild index  
+
+Ideal for:
+- RAG development  
+- Embedding analysis  
+- ML education  
+- LLM debugging  
+- Research & academic demos  
+
+---
+
+## 🧰 Features
+
+### 🧠 Local ChatGPT UI
+- Streamed messages  
+- Model switching  
+- PDF mode toggle  
+- Multi-PDF selection  
+- Page-level citations  
+- Typing indicator  
+
+---
+
+## 🔍 Embedding Explorer Tools
+
+### **1️⃣ Generate Embeddings**
+- Vector preview  
+- First 30 dims  
+- PCA (2D scatter)  
+- Dimension display  
+
+### **2️⃣ Compare Two Texts**
+- Cosine similarity  
+- L2 distance  
+- Dot product  
+- PCA 2D comparison  
+- PCA 3D visualization  
+- Difference heatmap  
+
+### **3️⃣ Cluster Explorer**
+- Batch embedding  
+- KMeans clustering  
+- PCA 2D visualization  
+- FAISS-powered  
+- Persistent index  
+
+### **4️⃣ Cosine Similarity Matrix**
+- Full NxN grid  
+- Color-coded similarity  
+- Label display  
+
+---
+
+## 📚 PDF RAG Engine
+✔ Upload any PDF  
+✔ Auto chunk text  
+✔ Embed with `nomic-embed-text`  
+✔ FAISS vector index  
+✔ Ask questions using selected PDFs  
+✔ Show exact source pages  
+✔ Delete PDFs & rebuild index  
+
+---
+
+## 🧱 Tech Stack
 
-This project is a local AI research and development platform that combines:
+| Layer | Technology |
+|-------|------------|
+| Backend | **Python, Flask** |
+| LLM Runtime | **Ollama (phi3, nomic-embed-text)** |
+| Vector Index | **FAISS** |
+| Math | **NumPy, scikit-learn** |
+| Frontend | **Tailwind CSS, Chart.js, Plotly** |
+| PDF Parsing | **PyMuPDF (fitz)** |
 
-ChatGPT-like local LLM chat interface
+Everything runs **locally**, **offline**, **fast**.
 
-Streamed responses
+---
 
-Model selector
+# 📦 Project Structure
 
-PDF-aware RAG mode
 
-Source citations
-
-Session history
-
-Embedding Explorer (Full Suite)
-
-Generate embeddings
-
-PCA 2D
-
-PCA 3D
-
-Cosine similarity / L2 / dot product
-
-Difference heatmap
-
-Batch embedding
-
-FAISS-based persistent vector index
-
-Similarity matrix
-
-KMeans clustering visualization
-
-PDF Intelligence (RAG)
-
-Upload PDFs
-
-Auto chunking
-
-Embedding + FAISS indexing
-
-Ask questions filtered by PDF
-
-Page-aware source highlighting
-
-Delete + rebuild index cleanly
-
-This tool is ideal for:
-
-Building RAG systems
-
-Understanding embeddings
-
-Debugging semantic similarity
-
-Learning ML engineering
-
-Explaining LLM internals
-
-Academic demonstrations
-
-🧰 Features
-🧠 Local ChatGPT (Ollama UI)
-
-✔ Stream chat responses
-✔ Switch models instantly
-✔ PDF mode toggle
-✔ Multi-PDF selection
-✔ Extracted page sources
-✔ Typing animations
-✔ Clean dark UI
-
-🔍 Embedding Explorer — Advanced Tools
-📌 1. Generate Embeddings
-
-Instant vector preview
-
-First 30 dims
-
-PCA (2D scatter)
-
-Dimension display
-
-🔗 2. Compare Two Text Embeddings
-
-Cosine similarity
-
-L2 distance
-
-Dot product
-
-PCA 2D comparison
-
-PCA 3D visualization (Plotly)
-
-Dim-wise difference heatmap
-
-🧬 3. Cluster Explorer
-
-Batch embed any texts
-
-Persist in FAISS
-
-KMeans clustering
-
-PCA 2D cluster plot
-
-🧩 4. Similarity Matrix
-
-Interactive cosine similarity grid
-
-Values + color-coded cells
-
-Scales based on semantic closeness
-
-📚 PDF RAG Engine
-
-✔ Upload any PDF
-✔ Extract + chunk content
-✔ Auto-embed with nomic-embed-text
-✔ Build FAISS index
-✔ Query with selected PDFs
-✔ Return exact pages as sources
-✔ Delete PDFs + clean index
-
-🧱 Tech Stack
-
-Backend: Python, Flask
-
-LLM Runtime: Ollama (phi3, nomic-embed-text)
-
-Vector Index: FAISS
-
-Math/ML: NumPy, scikit-learn
-
-Frontend: Tailwind CSS, Chart.js, Plotly
-
-PDF: PyMuPDF (fitz)
-
-Everything runs offline, local, and fast.
 
 📦 Project Structure
 ollama-local-chatgpt/
@@ -164,23 +140,35 @@ ollama-local-chatgpt/
 │── static/
 └── README.md
 
-▶️ Installation & Usage
-1️⃣ Install dependencies
+---
+
+## ▶️ Installation
+
+
+---
+
+## ▶️ Installation
+
+### 1️⃣ Install Python dependencies
+```sh
 pip install -r requirements.txt
-
 2️⃣ Start Ollama
+sh
+Copy code
 ollama serve
-
 3️⃣ Pull required models
+sh
+Copy code
 ollama pull phi3
 ollama pull nomic-embed-text
-
-4️⃣ Run server
+4️⃣ Run the Flask app
+sh
+Copy code
 python app.py
-
-5️⃣ Open in browser
-
+5️⃣ Open in your browser
 ➡ http://localhost:5000
+
+
 
 🔥 Roadmap
 Phase 1 — Embedding Visualizations
