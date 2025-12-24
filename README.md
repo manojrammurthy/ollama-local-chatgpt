@@ -7,233 +7,198 @@
 ![FAISS](https://img.shields.io/badge/FAISS-Vector%20Search-purple)
 ![License](https://img.shields.io/badge/License-MIT-yellow)
 ![Stars](https://img.shields.io/github/stars/manojrammurthy/ollama-local-chatgpt?style=social)
+🚀 Overview
 
-A **fully local ChatGPT alternative** with:
+This project is a local AI research and development platform that combines:
 
-✔ ChatGPT-style UI  
-✔ Local LLMs via Ollama (Phi-3, LLaMA-3, Mistral, etc.)  
-✔ PDF Upload + RAG  
-✔ Real-time streaming responses  
-✔ Embeddings using `nomic-embed-text`  
-✔ FAISS vector search  
-✔ No cloud, no API keys — **100% offline**
+ChatGPT-like local LLM chat interface
 
-Built using **Flask + TailwindCSS + Ollama + FAISS + PyMuPDF**.
+Streamed responses
 
----
+Model selector
 
----
+PDF-aware RAG mode
 
-# ✨ Features
+Source citations
 
-| Feature           | Description                                              |
-| ----------------- | -------------------------------------------------------- |
-| 🧠 Local LLM Chat | Uses any Ollama model (Phi-3, LLaMA-3, Mistral, Gemma… ) |
-| 📄 PDF Upload     | Load documents and ask questions from them               |
-| 🔍 RAG            | FAISS-powered retrieval from PDF chunks                  |
-| 🧬 Embeddings     | Uses `nomic-embed-text` for dense vector embeddings      |
-| 🚀 Live Streaming | Real-time token-by-token streaming like ChatGPT          |
-| 🎨 Modern UI      | TailwindCSS dark-mode chat interface                     |
-| 🔁 Model Selector | Switch Ollama models dynamically                         |
-| 💾 Chat Memory    | Auto-saved in browser localStorage                       |
-| 🔐 100% Offline   | No external API calls — everything runs on your laptop   |
+Session history
 
----
+Embedding Explorer (Full Suite)
 
-# 🧠 Architecture Overview
+Generate embeddings
 
-```
-Frontend (HTML + TailwindCSS)
-        ↓
-Flask API (Python)
-        ↓
-Ollama Chat Models (phi3, llama3, mistral…)
-        ↓
-Ollama Embedding Model (nomic-embed-text)
-        ↓
-FAISS Vector Search
-        ↓
-PDF Question Answering (RAG)
-```
+PCA 2D
 
----
+PCA 3D
 
-# 📁 Project Structure
+Cosine similarity / L2 / dot product
 
-```
-ollama_web_chat/
-│
-├── app.py
-├── requirements.txt
-├── README.md
-├── .gitignore
-│
-├── templates/
-│   └── index.html
-│
-└── static/   (optional for CSS/JS assets)
-```
+Difference heatmap
 
----
+Batch embedding
 
-# ⚙️ Installation
+FAISS-based persistent vector index
 
-## 1️⃣ Install Ollama
+Similarity matrix
 
-Linux/macOS:
+KMeans clustering visualization
 
-```bash
-curl -fsSL https://ollama.com/install.sh | sh
-```
+PDF Intelligence (RAG)
 
-Windows:
-Download from [https://ollama.com/download](https://ollama.com/download)
+Upload PDFs
 
----
+Auto chunking
 
-## 2️⃣ Pull required Ollama models
+Embedding + FAISS indexing
 
-```bash
-ollama pull phi3
-ollama pull llama3
-ollama pull mistral
-ollama pull nomic-embed-text
-```
+Ask questions filtered by PDF
 
----
+Page-aware source highlighting
 
-## 3️⃣ Install Python dependencies
+Delete + rebuild index cleanly
 
-```bash
+This tool is ideal for:
+
+Building RAG systems
+
+Understanding embeddings
+
+Debugging semantic similarity
+
+Learning ML engineering
+
+Explaining LLM internals
+
+Academic demonstrations
+
+🧰 Features
+🧠 Local ChatGPT (Ollama UI)
+
+✔ Stream chat responses
+✔ Switch models instantly
+✔ PDF mode toggle
+✔ Multi-PDF selection
+✔ Extracted page sources
+✔ Typing animations
+✔ Clean dark UI
+
+🔍 Embedding Explorer — Advanced Tools
+📌 1. Generate Embeddings
+
+Instant vector preview
+
+First 30 dims
+
+PCA (2D scatter)
+
+Dimension display
+
+🔗 2. Compare Two Text Embeddings
+
+Cosine similarity
+
+L2 distance
+
+Dot product
+
+PCA 2D comparison
+
+PCA 3D visualization (Plotly)
+
+Dim-wise difference heatmap
+
+🧬 3. Cluster Explorer
+
+Batch embed any texts
+
+Persist in FAISS
+
+KMeans clustering
+
+PCA 2D cluster plot
+
+🧩 4. Similarity Matrix
+
+Interactive cosine similarity grid
+
+Values + color-coded cells
+
+Scales based on semantic closeness
+
+📚 PDF RAG Engine
+
+✔ Upload any PDF
+✔ Extract + chunk content
+✔ Auto-embed with nomic-embed-text
+✔ Build FAISS index
+✔ Query with selected PDFs
+✔ Return exact pages as sources
+✔ Delete PDFs + clean index
+
+🧱 Tech Stack
+
+Backend: Python, Flask
+
+LLM Runtime: Ollama (phi3, nomic-embed-text)
+
+Vector Index: FAISS
+
+Math/ML: NumPy, scikit-learn
+
+Frontend: Tailwind CSS, Chart.js, Plotly
+
+PDF: PyMuPDF (fitz)
+
+Everything runs offline, local, and fast.
+
+📦 Project Structure
+ollama-local-chatgpt/
+│── app.py
+│── requirements.txt
+│── uploaded_pdfs/
+│── explorer_index.faiss
+│── explorer_meta.json
+│── templates/
+│     ├── index.html
+│     └── embedding_explorer.html
+│── static/
+└── README.md
+
+▶️ Installation & Usage
+1️⃣ Install dependencies
 pip install -r requirements.txt
-```
 
----
+2️⃣ Start Ollama
+ollama serve
 
-## 4️⃣ Run the Flask app
+3️⃣ Pull required models
+ollama pull phi3
+ollama pull nomic-embed-text
 
-```bash
+4️⃣ Run server
 python app.py
-```
 
-Then open:
+5️⃣ Open in browser
 
-```
-http://localhost:5000
-```
+➡ http://localhost:5000
 
----
+🔥 Roadmap
+Phase 1 — Embedding Visualizations
 
-# 🧬 Embeddings Explained
+✔ Completed
 
-This project uses:
+Phase 2 — Financial Embedding Model
 
-```
-nomic-embed-text
-```
+⏳ Next
 
-Each chunk of your PDF is converted into a vector (embedding).
-These vectors are stored in a **FAISS index**.
+Phase 3 — Fine-tuning embeddings
 
-During a question:
+🎯 Coming soon
 
-1. User question → embedded
-2. Vector compared against FAISS index
-3. Top-k relevant chunks returned
-4. Passed to LLM as RAG prompt
-5. LLM answers using context
+Phase 4 — Multi-user AI dashboard (Django + Postgres vector DB)
 
-This gives extremely accurate answers for:
+🔥 Future milestone
 
-* Annual reports
-* Research papers
-* Legal documents
-* Technical PDFs
-* Policies
+Phase 5 — Desktop version (Electron / Tauri)
 
----
-
-# 📄 PDF RAG Flow
-
-```
-PDF → Text Extraction → Chunking → Embedding → FAISS Index
-                                 ↑
-                           User Question
-                                 ↓
-                            Vector Search
-                                 ↓
-                          Relevant Chunks
-                                 ↓
-                         LLM generates answer
-```
-
----
-
-# 🔁 Switching Models
-
-The UI pulls all locally installed models:
-
-```
-/models → from Ollama tags API
-```
-
-You can switch between:
-
-* phi3
-* mistral
-* llama3
-* codellama
-* gemma
-* your custom models
-
-Every change clears chat history automatically.
-
----
-
-# 🚀 Roadmap
-
-### ✔ v1.0 (Current)
-
-* Local chat
-* PDF embedding + FAISS
-* Model selection
-* Streaming
-* Modern UI
-
-### 🔜 v1.1
-
-* Sidebar multi-threaded chat
-* Voice input (Whisper)
-* Export conversation
-* Multi-PDF knowledgebase
-* Dark/light toggle
-
-### 🔮 v2.0
-
-* Custom embedding model fine-tuning
-* Workspace mode (knowledge graphs)
-* Browser extension version
-* Desktop app (Electron or PyInstaller)
-
----
-
-# 🤝 Contributing
-
-Pull requests welcome!
-If you want to add a feature, open an issue first.
-
----
-
-# ⭐ Support the Project
-
-If you find this useful, please give this repo a ⭐ on GitHub.
-It helps more people discover offline LLM tools.
-
----
-
-# 📄 License
-
-This project is licensed under the **MIT License**.
-
-````
-
+🖥️ Planned
