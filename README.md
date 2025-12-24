@@ -153,17 +153,13 @@ ollama-local-chatgpt/
 ```sh
 pip install -r requirements.txt
 2️⃣ Start Ollama
-sh
-Copy code
 ollama serve
 3️⃣ Pull required models
-sh
-Copy code
+
 ollama pull phi3
 ollama pull nomic-embed-text
 4️⃣ Run the Flask app
-sh
-Copy code
+
 python app.py
 5️⃣ Open in your browser
 ➡ http://localhost:5000
