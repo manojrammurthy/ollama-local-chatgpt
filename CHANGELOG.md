@@ -4,7 +4,7 @@ All notable changes to **Ollama Local ChatGPT + Embedding Explorer** will be doc
 
 ---
 
-## [1.0.1] — 2025-02-XX  
+## [1.0.1] — 2025-12-24  
 ### 🎉 Added  
 - Complete Chat UI (Ollama-based)  
 - PDF Upload + Chunking engine  
@@ -45,7 +45,7 @@ All notable changes to **Ollama Local ChatGPT + Embedding Explorer** will be doc
 
 ---
 
-## [0.1.0] — 2025-01  
+## [0.1.0] — 2025-11-30
 ### Initial prototype  
 - Basic chat UI  
 - PDF upload (non-indexed)  
