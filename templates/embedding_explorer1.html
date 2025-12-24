@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Embedding Explorer</title>
+
+  <!-- Tailwind -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- Chart.js + Matrix Plugin -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-chart-matrix@1.3.0"></script>
+
+  <!-- Latest Plotly -->
+  <script src="https://cdn.plot.ly/plotly-2.30.0.min.js"></script>
+
+  <style>
+    body { background: #0f0f0f; color: #e5e5e5; }
+    .card {
+      background: #1a1a1a;
+      border: 1px solid #333;
+      padding: 20px;
+      border-radius: 10px;
+    }
+    .input-box {
+      width: 100%;
+      padding: 12px;
+      background: #111;
+      border: 1px solid #333;
+      border-radius: 8px;
+      color: white;
+    }
+  </style>
+</head>
+
+<body class="min-h-screen">
+
+<!-- HEADER -->
+<header class="bg-[#141414] px-6 py-4 border-b border-gray-800 flex justify-between">
+  <h1 class="text-2xl font-semibold">Embedding Explorer</h1>
+  <a href="/" class="px-4 py-2 bg-blue-600 rounded hover:bg-blue-500 text-white text-sm">← Back</a>
+</header>
+
+<div class="flex h-[calc(100vh-68px)]">
+
+  <!-- SIDEBAR -->
+  <aside class="w-64 bg-[#121212] border-r border-gray-800 p-6">
+    <h3 class="text-gray-400 uppercase text-xs mb-4">Tools</h3>
+
+    <button class="w-full text-left py-2 px-3 rounded hover:bg-gray-800"
+            onclick="showPanel('gen-panel')">📌 Generate Embedding</button>
+
+    <button class="w-full text-left py-2 px-3 rounded hover:bg-gray-800"
+            onclick="showPanel('cmp-panel')">🔗 Compare Embeddings</button>
+  </aside>
+
+  <!-- MAIN -->
+  <main class="flex-1 overflow-y-auto p-8 space-y-10">
+
+
+    <!-- GENERATE EMBEDDING PANEL -->
+    <section id="gen-panel" class="card">
+      <h2 class="text-xl font-semibold mb-4">📌 Generate Embedding</h2>
+
+      <textarea id="embedText" class="input-box mb-4" rows="4"
+        placeholder="Enter text to embed..."></textarea>
+
+      <button id="genBtn" class="px-6 py-3 bg-blue-600 rounded hover:bg-blue-500">Generate</button>
+
+      <p id="loading" class="text-green-400 mt-3 hidden">Loading...</p>
+
+      <div id="results" class="mt-6 hidden">
+        <p>Dimension: <span id="dim"></span></p>
+        <p class="mt-2 text-gray-400">Preview:</p>
+        <pre id="preview" class="bg-black p-4 rounded mt-2"></pre>
+
+        <h3 class="text-lg mt-6 mb-2">📉 PCA (2D)</h3>
+        <canvas id="pcaChart" height="280"></canvas>
+      </div>
+    </section>
+
+
+    <!-- COMPARE EMBEDDINGS PANEL -->
+    <section id="cmp-panel" class="card hidden">
+      <h2 class="text-xl font-semibold mb-4">🔗 Compare Embeddings</h2>
+
+      <div class="grid grid-cols-2 gap-4">
+        <textarea id="cmpText1" class="input-box" rows="4" placeholder="Text 1..."></textarea>
+        <textarea id="cmpText2" class="input-box" rows="4" placeholder="Text 2..."></textarea>
+      </div>
+
+      <button id="cmpBtn" class="mt-4 px-6 py-3 bg-purple-600 rounded hover:bg-purple-500">
+        Compare
+      </button>
+
+      <!-- OUTPUT -->
+      <div id="cmpResults" class="mt-6 hidden">
+        <p>Cosine Similarity: <span id="cosSim"></span></p>
+        <p>L2 Distance: <span id="l2Dist"></span></p>
+        <p>Dot Product: <span id="dotProd"></span></p>
+
+        <h3 class="text-lg mt-4">📉 PCA (2D)</h3>
+        <canvas id="cmpChart" height="280"></canvas>
+
+        <h3 class="text-lg mt-8">📊 PCA (3D)</h3>
+        <div id="pca3d" style="height: 360px;"></div>
+
+        <h3 class="text-lg mt-8">🧊 Heatmap</h3>
+        <canvas id="heatmapCanvas" height="200"></canvas>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+
+
+
+<script>
+/* --------------------------------
+   PANEL SWITCHING
+-------------------------------- */
+function showPanel(id) {
+  document.querySelectorAll("main section").forEach(sec => sec.classList.add("hidden"));
+  document.getElementById(id).classList.remove("hidden");
+}
+
+
+/* --------------------------------
+   EMBEDDING: GENERATE
+-------------------------------- */
+let pcaChart = null;
+
+document.getElementById("genBtn").onclick = async () => {
+  const text = embedText.value.trim();
+  if (!text) return alert("Enter text");
+
+  loading.classList.remove("hidden");
+  results.classList.add("hidden");
+
+  const res = await fetch("/embed_text", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ text })
+  });
+
+  const data = await res.json();
+  loading.classList.add("hidden");
+
+  if (data.error) return alert(data.error);
+
+  results.classList.remove("hidden");
+  dim.innerText = data.dimension;
+  preview.innerText = JSON.stringify(data.vector_preview, null, 2);
+
+  // 2D PCA plot
+  const ctx = document.getElementById("pcaChart").getContext("2d");
+  if (pcaChart) pcaChart.destroy();
+
+  pcaChart = new Chart(ctx, {
+    type: "scatter",
+    data: { datasets: [{ data: [{ x: data.pca[0], y: data.pca[1] }], backgroundColor: "lime" }] }
+  });
+};
+
+
+/* --------------------------------
+   COMPARE EMBEDDINGS
+-------------------------------- */
+let cmpChart = null;
+let heatmapChart = null;
+
+document.getElementById("cmpBtn").onclick = async () => {
+  const t1 = cmpText1.value.trim();
+  const t2 = cmpText2.value.trim();
+  if (!t1 || !t2) return alert("Enter both texts");
+
+  // --- Compare API ---
+  const res = await fetch("/compare_embeddings", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ text1: t1, text2: t2 })
+  });
+
+  const data = await res.json();
+  if (data.error) return alert("Compare error");
+
+  cmpResults.classList.remove("hidden");
+
+  cosSim.innerText = data.cosine_similarity.toFixed(4);
+  l2Dist.innerText = data.l2_distance.toFixed(4);
+  dotProd.innerText = data.dot_product.toFixed(4);
+
+  /* ---------- PCA 2D ---------- */
+  const ctx = document.getElementById("cmpChart").getContext("2d");
+  if (cmpChart) cmpChart.destroy();
+
+  cmpChart = new Chart(ctx, {
+    type: "scatter",
+    data: {
+      datasets: [
+        { label: "Text 1", data: [{ x: data.pca_points[0][0], y: data.pca_points[0][1] }], backgroundColor: "lime" },
+        { label: "Text 2", data: [{ x: data.pca_points[1][0], y: data.pca_points[1][1] }], backgroundColor: "red" }
+      ]
+    }
+  });
+
+  /* ---------- 3D PCA ---------- */
+  const res3d = await fetch("/pca_3d", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ text1: t1, text2: t2 })
+  });
+  const d3 = await res3d.json();
+
+  Plotly.newPlot("pca3d", [{
+    x: [d3.points_3d[0][0], d3.points_3d[1][0]],
+    y: [d3.points_3d[0][1], d3.points_3d[1][1]],
+    z: [d3.points_3d[0][2], d3.points_3d[1][2]],
+    mode: "markers+lines",
+    marker: { size: 6, color: ["lime", "red"] }
+  }], { margin: { t: 0 } });
+
+  /* ---------- HEATMAP ---------- */
+  const diff = data.diff_vector;
+  const heatCtx = document.getElementById("heatmapCanvas").getContext("2d");
+
+  const heatData = diff.map((v, i) => ({ x: i, y: 0, v }));
+  const maxAbs = Math.max(...diff.map(v => Math.abs(v)));
+
+  if (heatmapChart) heatmapChart.destroy();
+
+  heatmapChart = new Chart(heatCtx, {
+    type: "matrix",
+    data: {
+      datasets: [{
+        label: "Diff Heatmap",
+        data: heatData,
+        width: () => 3,
+        height: () => 50,
+        backgroundColor: ctx => {
+          const a = Math.abs(ctx.raw.v) / maxAbs;
+          return ctx.raw.v > 0 ? `rgba(0,255,0,${a})` : `rgba(255,0,0,${a})`;
+        }
+      }]
+    },
+    options: {
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { display: false },
+        y: { display: false }
+      }
+    }
+  });
+
+};
+</script>
+
+</body>
+</html>

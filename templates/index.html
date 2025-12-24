@@ -81,7 +81,7 @@
     <div id="chat-box" class="flex-1 overflow-y-auto p-4 space-y-4"></div>
 
     <!-- FOOTER -->
-    <footer class="p-4 bg-[#1e1e1e] border-t border-gray-700">
+    <footer class="p-4 bg-[#1e1e1e] border-t border-gray-700 flex-shrink-0">
 
       <div class="mb-3 flex space-x-3">
         <button id="ask-pdf-btn"
@@ -107,6 +107,21 @@
       </div>
 
     </footer>
+    <!-- PDF VIEWER PANEL -->
+<div id="pdfViewerPanel"
+     class="fixed right-0 top-0 h-full w-[420px] bg-black border-l border-gray-700 hidden flex-col">
+
+  <div class="p-3 flex justify-between items-center bg-[#1e1e1e] border-b border-gray-700">
+    <h2 class="text-lg font-semibold">📄 PDF Viewer</h2>
+    <button id="closePdfViewer" class="text-red-400 hover:text-red-300">✖</button>
+  </div>
+
+  <iframe id="pdfFrame"
+          class="flex-1 w-full"
+          src=""
+          style="height: calc(100% - 50px);"></iframe>
+</div>
+
   </div>
 </div>
 
@@ -121,8 +136,24 @@ const pdfInput = document.getElementById("pdf-input");
 const pdfList = document.getElementById("pdfList");
 const askPdfBtn = document.getElementById("ask-pdf-btn");
 
-let selectedDocs = [];   // ACTIVE PDF selection
+let selectedDocs = [];   
 let pdfMode = false;
+
+const pdfViewer = document.getElementById("pdfViewerPanel");
+const pdfFrame = document.getElementById("pdfFrame");
+const closePdfViewer = document.getElementById("closePdfViewer");
+
+function openPdfViewer(docId, page) {
+  pdfViewer.classList.remove("hidden");
+
+  // Load PDF + jump to specific page
+  pdfFrame.src = `/uploaded_pdfs/${docId}#page=${page}`;
+}
+
+closePdfViewer.onclick = () => {
+  pdfViewer.classList.add("hidden");
+};
+
 
 // -----------------------------
 // ADD PDF TO SIDEBAR
@@ -152,7 +183,6 @@ function addPdfToSidebar(fileName, chunks) {
       </div>
     </label>
 
-    <!-- 🗑 DELETE BUTTON -->
     <button class="absolute top-2 right-2 text-red-400 hover:text-red-300 delete-btn"
             data-doc="${fileName}">
       🗑
@@ -161,7 +191,6 @@ function addPdfToSidebar(fileName, chunks) {
 
   pdfList.appendChild(wrapper);
 
-  // Register delete button event
   wrapper.querySelector(".delete-btn").onclick = () => deletePdf(fileName);
 
   updateSelected();
@@ -170,30 +199,23 @@ function addPdfToSidebar(fileName, chunks) {
 async function deletePdf(docName) {
   if (!confirm(`Delete ${docName}?`)) return;
 
-  // Remove from backend
-  const res = await fetch("/delete_pdf", {
+  await fetch("/delete_pdf", {
     method: "POST",
     headers: {"Content-Type": "application/json"},
     body: JSON.stringify({ doc_id: docName })
   });
 
-  const data = await res.json();
-
-  // Remove from UI
   [...pdfList.children].forEach(div => {
     if (div.innerHTML.includes(docName)) div.remove();
   });
 
-  // If no PDFs left
   if (pdfList.children.length === 0) {
     pdfList.innerHTML = `<p class="text-gray-500">No PDFs uploaded yet.</p>`;
   }
 
-  alert(`Deleted: ${docName}`);
   updateSelected();
 }
 
-// Track selected PDFs
 function updateSelected() {
   selectedDocs = [...document.querySelectorAll(".pdf-checkbox:checked")]
     .map(cb => cb.value);
@@ -203,18 +225,6 @@ function updateSelected() {
       ? `Ask (${selectedDocs.length} PDFs)`
       : "Ask from Selected PDFs";
 }
-
-// Select All
-document.getElementById("selectAllBtn").onclick = () => {
-  document.querySelectorAll(".pdf-checkbox").forEach(cb => cb.checked = true);
-  updateSelected();
-};
-
-// Clear All
-document.getElementById("deselectAllBtn").onclick = () => {
-  document.querySelectorAll(".pdf-checkbox").forEach(cb => cb.checked = false);
-  updateSelected();
-};
 
 
 // -----------------------------
@@ -242,7 +252,6 @@ modelSelect.onchange = async () => {
     headers: {"Content-Type": "application/json"},
     body: JSON.stringify({ model: modelSelect.value })
   });
-  alert("Model changed to " + modelSelect.value);
 };
 
 
@@ -326,7 +335,7 @@ pdfInput.onchange = async () => {
 
 
 // -----------------------------
-// SEND MESSAGE (supports PDF RAG)
+// SEND MESSAGE (Chat + RAG)
 // -----------------------------
 sendBtn.onclick = async () => {
   const text = msgBox.value.trim();
@@ -361,6 +370,7 @@ sendBtn.onclick = async () => {
     "chat-bubble max-w-xl mr-auto bg-[#2f2f2f] text-green-300 p-3 rounded-xl";
   chatBox.appendChild(bubble);
 
+  // STREAM RESPONSE
   while (true) {
     const { value, done } = await reader.read();
     if (done) break;
@@ -369,6 +379,45 @@ sendBtn.onclick = async () => {
     llmText += chunk;
     bubble.innerHTML = llmText.replace(/\n/g, "<br>");
     chatBox.scrollTop = chatBox.scrollHeight;
+  }
+
+  // ------------------------------
+  // ⭐ ADD SOURCE BOX (NEW)
+  // ------------------------------
+  const sourceHeader = response.headers.get("X-RAG-Sources");
+  if (sourceHeader) {
+    try {
+      const sources = JSON.parse(sourceHeader);
+
+      const srcBox = document.createElement("div");
+      srcBox.className =
+        "mt-3 p-3 bg-black/30 border border-gray-700 rounded text-gray-300 text-sm";
+
+      let html = `<b>📄 Sources Used:</b><br>`;
+     sources.forEach((s, i) => {
+      html += `
+        <button class="text-blue-400 hover:underline source-link"
+                data-doc="${s.doc_id}"
+                data-page="${s.page}">
+          Source ${i+1}: ${s.doc_id} — Page ${s.page}
+        </button><br>`;
+    });;
+
+      srcBox.innerHTML = html;
+      bubble.appendChild(srcBox);
+
+      // Enable click → open viewer
+    srcBox.querySelectorAll(".source-link").forEach(btn => {
+      btn.onclick = () => {
+        const did = btn.dataset.doc;
+        const pg = btn.dataset.page;
+        openPdfViewer(did, pg);
+      };
+    });
+
+    } catch (e) {
+      console.log("Source parse error", e);
+    }
   }
 };
 
